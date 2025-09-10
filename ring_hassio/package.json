@@ -11,7 +11,6 @@
         "dotenv-extended": "^2.8.0",
         "ring-client-api": "14",
         "http": "^0.0.0",
-        "zlib": "^1.0.5",
         "url": "^0.11.0"
     },
     "devDependencies": {
