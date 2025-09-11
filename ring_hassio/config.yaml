@@ -17,7 +17,7 @@ ports:
 map:
   - config:rw
   - data:rw
-  - share:ew
+  - share:rw
 options:
   ring_refresh_token: ""
   camera_name: ""
