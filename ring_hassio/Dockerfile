@@ -8,6 +8,8 @@ ENV LANG C.UTF-8
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 EXPOSE 3001/tcp
 
+COPY public /
+
 RUN apk add --no-cache \
     nodejs \
     npm \
