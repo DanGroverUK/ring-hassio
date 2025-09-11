@@ -5,4 +5,5 @@ export CAMERA_NAME="$(jq --raw-output '.camera_name' $CONFIG_PATH)"
 export RING_PORT="$(jq --raw-output '.port' $CONFIG_PATH)"
 
 cd /ring-hassio/ring_hassio
+cp public /data/ -r
 node livestream.js
