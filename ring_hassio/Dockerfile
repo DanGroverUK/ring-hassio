@@ -9,6 +9,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 EXPOSE 3001/tcp
 
 COPY public /
+COPY icon.png /icon.png
 
 RUN apk add --no-cache \
     nodejs \
