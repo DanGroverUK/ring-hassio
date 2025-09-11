@@ -1,21 +1,16 @@
 {
-    "name": "ring_livestream",
-        "version": "1.4.3",
-    "description": "Ring Livestream addon",
-    "author": "Jeroen ter Heerdt",
-    "main": "livestream.js",
-    "scripts": {
-        "start": "node livestream.js"
-    },
-    "dependencies": {
-        "dotenv-extended": "^2.8.0",
-        "ring-client-api": "14",
-        "http": "^0.0.0",
-        "url": "^0.11.0"
-    },
-    "devDependencies": {
-        "@types/node": "^14.0.23",
-        "@types/socket.io-client": "^1.4.33",
-        "typescript": "^3.9.6"
-    }
+  "name": "ring-hassio",
+  "version": "0.1.0",
+  "description": "Home Assistant add-on to expose Ring live streams as HLS",
+  "main": "server.js",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "minimist": "^1.2.8",
+    "ring-client-api": "^13.3.0"
+  }
 }
