@@ -140,7 +140,9 @@ function startStream() {
                                                     zlib.gzip(contents, function (err, zip) {
                                                         if (err)
                                                             throw err;
-                                                        res.writeHead(200, { 'content-encoding': 'gzip' });
+                                                        if (!res.headersSent) {
+                                                            res.writeHead(200, { 'content-encoding': 'gzip' });
+                                                        }
                                                         res.end(zip);
                                                     });
                                                 }
