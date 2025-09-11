@@ -1,6 +1,6 @@
 {
     "name": "Ring Livestream",
-    "version": "1.35",
+    "version": "1.40",
     "slug": "ringlivestream",
     "description": "A Home Assistant add-on to enable live streams of Ring Cameras.",
     "url": "https://github.com/jeroenterheerdt/ring-hassio",
@@ -15,21 +15,23 @@
     ],
     "boot":"auto",
     "ports": {
-        "3001/tcp": 3001
+        "3000/tcp": 3000
     },
     "ports_description": {
-        "3001/tcp": "The port you want to expose. You will need to expose this port in your router as well and make sure it is matching the port setting in the options."
+        "3000/tcp": "The port you want to expose. You will need to expose this port in your router as well and make sure it is matching the port setting in the options."
     },
-    "webui": "http://[HOST]:[PORT:3001]/index.html",
+    "webui": "http://[HOST]:[PORT:3000]/index.html",
     "options": {
         "ring_refresh_token": "refresh_token",
         "camera_name": "Front Door",
-        "port": 3001
+        "port": 3000,
+        "unique_id": "123456789"
     },
     "schema": {
         "ring_refresh_token":"str",
         "camera_name": "str",
-        "port":"port"
+        "port":"port",
+        "unique_id": "str"
     },
     "map": [
         "share:rw",
