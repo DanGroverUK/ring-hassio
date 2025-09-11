@@ -4,7 +4,6 @@
   "description": "Home Assistant add-on to expose Ring live streams as HLS",
   "main": "server.js",
   "license": "MIT",
-  "type": "module",
   "scripts": {
     "start": "node server.js"
   },

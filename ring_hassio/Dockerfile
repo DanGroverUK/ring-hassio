@@ -1,7 +1,5 @@
-# syntax=docker/dockerfile:1
-# Multi-arch (Pi 5 = aarch64). HA's build system swaps BUILD_FROM automatically.
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
-FROM ${BUILD_FROM}
+ARG BUILD_FROM
+FROM $BUILD_FROM
 
 # System deps: ffmpeg (with v4l2m2m), node, jq for options parsing, curl for healthcheck
 RUN apk add --no-cache nodejs npm ffmpeg jq curl bash
