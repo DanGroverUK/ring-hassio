@@ -1,0 +1,463 @@
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..c6a2f3a
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,37 @@
++# syntax=docker/dockerfile:1
++# Multi-arch base (Pi 5 = aarch64). HA's build system swaps BUILD_FROM automatically.
++ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
++FROM ${BUILD_FROM}
++
++# System deps: ffmpeg (with v4l2m2m), node, jq for options parsing, curl for healthcheck
++RUN apk add --no-cache nodejs npm ffmpeg jq curl bash
++
++WORKDIR /opt/ring
++COPY package*.json ./
++RUN npm ci --omit=dev
++
++# App files
++COPY server.js ./
++COPY run.sh /run.sh
++RUN chmod +x /run.sh
++
++# HLS output location
++RUN mkdir -p /opt/ring/public
++
++EXPOSE 8080
++HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS http://localhost:8080/health || exit 1
++CMD ["/run.sh"]
+diff --git a/config.yaml b/config.yaml
+new file mode 100644
+index 0000000..9a0b13b
+--- /dev/null
++++ b/config.yaml
+@@ -0,0 +1,40 @@
++name: Ring Livestream
++version: "0.1.1"
++slug: ringlivestream
++description: Live stream Ring cameras via ring-client-api + ffmpeg (on-demand)
++arch:
++  - aarch64
++  - amd64
++  - armv7
++startup: services
++boot: manual
++init: false
++ingress: false
++panel_icon: mdi:video
++ports:
++  8080/tcp: 8080
++map:
++  - config:rw
++options:
++  ring_refresh_token: ""
++  camera_name: ""
++  stream_quality: "high"   # low|medium|high
++  video_codec: "auto"      # auto|copy|h264_v4l2m2m|h264
++  hwaccel: "auto"          # auto|none
++  port: 8080
++  debug: false
++  # Home Assistant event/state integration
++  ha_integration: true
++  ha_entity_id: "binary_sensor.ring_livestream_playing"
++  ha_event_prefix: "ring_livestream"
++schema:
++  ring_refresh_token: str
++  camera_name: str
++  stream_quality: list(low|medium|high)?
++  video_codec: list(auto|copy|h264_v4l2m2m|h264)?
++  hwaccel: list(auto|none)?
++  port: int?
++  debug: bool?
++  ha_integration: bool?
++  ha_entity_id: str?
++  ha_event_prefix: str?
++image: null
+diff --git a/docs/HA_integration.md b/docs/HA_integration.md
+new file mode 100644
+index 0000000..b2d2d5a
+--- /dev/null
++++ b/docs/HA_integration.md
+@@ -0,0 +1,74 @@
++# Home Assistant Integration (events & state)
++
++This add-on publishes playback status to Home Assistant so you can drive automations.
++
++## What you get
++
++- **Binary sensor** (default: `binary_sensor.ring_livestream_playing`)
++  - `on` when the livestream is running
++  - `off` when stopped or errored
++  - Attributes: `camera`, `quality`, `codec`, `playlist`, `last_change`
++
++- **Events** (prefix configurable, default `ring_livestream`)
++  - `ring_livestream_started` — fired when the stream begins
++  - `ring_livestream_stopped` — fired when the stream ends or stalls
++
++## Options
++
++```yaml
++ha_integration: true
++ha_entity_id: binary_sensor.ring_livestream_playing
++ha_event_prefix: ring_livestream
++```
++
++## Example automations
++
++Notify when stream starts:
++
++```yaml
++automation:
++  - alias: Notify Ring Stream Start
++    trigger:
++      - platform: state
++        entity_id: binary_sensor.ring_livestream_playing
++        to: 'on'
++    action:
++      - service: notify.mobile_app_pixel_7
++        data:
++          message: >
++            Ring stream started ({{ state_attr('binary_sensor.ring_livestream_playing','camera') }})
++```
++
++Turn on a light using event trigger:
++
++```yaml
++automation:
++  - alias: Light on when Ring livestream starts
++    trigger:
++      - platform: event
++        event_type: ring_livestream_started
++    action:
++      - service: light.turn_on
++        target:
++          entity_id: light.studio
++```
++
++> **Note:** States set via `/api/states/...` are ephemeral (not permanently registered). They’ll be recreated when the add-on runs, which is ideal for a runtime sensor.
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..0ef7ce1
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,19 @@
++{
++  "name": "ring-hassio",
++  "version": "0.1.1",
++  "description": "Home Assistant add-on to expose Ring live streams as HLS",
++  "main": "server.js",
++  "license": "MIT",
++  "type": "module",
++  "scripts": {
++    "start": "node server.js"
++  },
++  "dependencies": {
++    "express": "^4.19.2",
++    "minimist": "^1.2.8",
++    "ring-client-api": "^13.3.0"
++  }
++}
+diff --git a/run.sh b/run.sh
+new file mode 100755
+index 0000000..a7a2d5f
+--- /dev/null
++++ b/run.sh
+@@ -0,0 +1,35 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++OPTIONS=/data/options.json
++
++TOKEN=$(jq -r '.ring_refresh_token' "$OPTIONS")
++NAME=$(jq -r '.camera_name' "$OPTIONS")
++QUALITY=$(jq -r '.stream_quality // "high"' "$OPTIONS")
++DEBUG=$(jq -r '.debug // false' "$OPTIONS")
++PORT=$(jq -r '.port // 8080' "$OPTIONS")
++
++# Hardware / codec preferences (optional)
++CODEC=$(jq -r '.video_codec // "auto"' "$OPTIONS")   # auto|copy|h264_v4l2m2m|h264
++HWACCEL=$(jq -r '.hwaccel // "auto"' "$OPTIONS")     # auto|none
++
++# HA integration
++HA_INT=$(jq -r '.ha_integration // true' "$OPTIONS")
++HA_ENTITY=$(jq -r '.ha_entity_id // "binary_sensor.ring_livestream_playing"' "$OPTIONS")
++HA_PREFIX=$(jq -r '.ha_event_prefix // "ring_livestream"' "$OPTIONS")
++
++export NODE_ENV=production
++
++ARGS=(--token "$TOKEN" --name "$NAME" --quality "$QUALITY" --port "$PORT"
++      --codec "$CODEC" --hwaccel "$HWACCEL"
++      --ha-integration "$HA_INT" --ha-entity "$HA_ENTITY" --ha-prefix "$HA_PREFIX")
++[[ "$DEBUG" == "true" ]] && ARGS+=("--debug")
++
++echo "Starting Ring HLS server on port $PORT (quality=$QUALITY, codec=${CODEC}, hwaccel=${HWACCEL})"
++exec node /opt/ring/server.js "${ARGS[@]}"
+diff --git a/server.js b/server.js
+new file mode 100644
+index 0000000..e1a0d3d
+--- /dev/null
++++ b/server.js
+@@ -0,0 +1,312 @@
++// server.js - Ring → ffmpeg → HLS + Home Assistant events/state (Pi 5 friendly)
++import path from 'node:path';
++import fs from 'node:fs';
++import http from 'node:http';
++import express from 'express';
++import minimist from 'minimist';
++import { RingApi } from 'ring-client-api';
++
++const argv = minimist(process.argv.slice(2), {
++  string: ['token', 'name', 'quality', 'codec', 'hwaccel', 'ha-entity', 'ha-prefix'],
++  boolean: ['debug', 'ha-integration'],
++  default: {
++    port: 8080, quality: 'high', debug: false, codec: 'auto', hwaccel: 'auto',
++    'ha-integration': true, 'ha-entity': 'binary_sensor.ring_livestream_playing', 'ha-prefix': 'ring_livestream'
++  }
++});
++
++const REFRESH_TOKEN = argv.token || process.env.RING_REFRESH_TOKEN || '';
++const CAMERA_NAME   = argv.name || '';
++const QUALITY       = String(argv.quality || 'high').toLowerCase();
++const DEBUG         = Boolean(argv.debug);
++const PORT          = Number(argv.port) || 8080;
++const CODEC_PREF    = String(argv.codec || 'auto').toLowerCase();   // auto|copy|h264|h264_v4l2m2m
++const HWACCEL_PREF  = String(argv.hwaccel || 'auto').toLowerCase(); // auto|none
++
++const HA_ENABLED    = Boolean(argv['ha-integration']);
++const HA_ENTITY_ID  = String(argv['ha-entity']);
++const HA_PREFIX     = String(argv['ha-prefix']);
++
++if (!REFRESH_TOKEN) {
++  console.error('[ring] Missing --token');
++  process.exit(2);
++}
++
++const OUT_DIR = '/opt/ring/public';
++const PLAYLIST = path.join(OUT_DIR, 'stream.m3u8');
++
++// ------- HTTP server (status & health) -------
++const app = express();
++app.use('/public', express.static(OUT_DIR, { fallthrough: false }));
++app.get('/health', (_req, res) => {
++  fs.stat(PLAYLIST, (err, st) => {
++    if (err) return res.status(503).json({ ok: false, reason: 'no_playlist' });
++    const age = Date.now() - st.mtimeMs;
++    res.status(age < 15000 ? 200 : 503).json({ ok: age < 15000, age_ms: Math.round(age), updated_at: st.mtime.toISOString() });
++  });
++});
++app.get('/status', (_req, res) => {
++  res.json({ camera: CAMERA_NAME || '(first)', quality: QUALITY, entity_id: HA_ENTITY_ID, playlist: fs.existsSync(PLAYLIST) });
++});
++const server = http.createServer(app);
++
++// ------- utils -------
++const log = (...a) => console.log(new Date().toISOString(), ...a);
++const dbg = (...a) => { if (DEBUG) console.debug(new Date().toISOString(), '[debug]', ...a); };
++const sleep = (ms) => new Promise(r => setTimeout(r, ms));
++
++function prepareOutDir() {
++  fs.mkdirSync(OUT_DIR, { recursive: true });
++  for (const f of fs.readdirSync(OUT_DIR)) {
++    if (/\.(m3u8|ts|m4s|mp4)$/.test(f)) { try { fs.unlinkSync(path.join(OUT_DIR, f)); } catch {} }
++  }
++}
++
++// ------- HA integration helpers (Supervisor Core API proxy) -------
++const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || '';
++const HA_BASE = 'http://supervisor/core/api';
++
++async function haFetch(path, init = {}) {
++  if (!HA_ENABLED) return null;
++  if (!SUPERVISOR_TOKEN) { console.error('[ha] SUPERVISOR_TOKEN not present; disable ha_integration or run as HA add-on.'); return null; }
++  const headers = init.headers ? new Headers(init.headers) : new Headers();
++  headers.set('Authorization', `Bearer ${SUPERVISOR_TOKEN}`);
++  headers.set('Content-Type', 'application/json');
++  const res = await fetch(`${HA_BASE}${path}`, { ...init, headers });
++  return res;
++}
++
++async function haFireEvent(type, data) {
++  if (!HA_ENABLED) return;
++  try {
++    const res = await haFetch(`/events/${encodeURIComponent(type)}`, { method: 'POST', body: JSON.stringify(data || {}) });
++    if (!res || !res.ok) throw new Error(`HTTP ${res?.status}`);
++    dbg('[ha] event fired:', type);
++  } catch (e) {
++    console.error(new Date().toISOString(), '[ha] fire event failed:', e?.message || e);
++  }
++}
++
++async function haSetState(entityId, state, attributes) {
++  if (!HA_ENABLED) return;
++  try {
++    const body = { state: String(state), attributes: attributes || {} };
++    const res = await haFetch(`/states/${encodeURIComponent(entityId)}`, { method: 'POST', body: JSON.stringify(body) });
++    if (!res || !res.ok) throw new Error(`HTTP ${res?.status}`);
++    dbg('[ha] state set:', entityId, state);
++  } catch (e) {
++    console.error(new Date().toISOString(), '[ha] set state failed:', e?.message || e);
++  }
++}
++
++// Convenience wrappers for our specific signals
++async function signalPlaying(cameraName, codecUsed) {
++  const playlistUrl = `http://homeassistant.local:${PORT}/public/stream.m3u8`;
++  await Promise.all([
++    haFireEvent(`${HA_PREFIX}_started`, { camera: cameraName, quality: QUALITY, codec: codecUsed, playlist: playlistUrl }),
++    haSetState(HA_ENTITY_ID, 'on', {
++      friendly_name: 'Ring Livestream Playing',
++      device_class: 'running',
++      camera: cameraName,
++      quality: QUALITY,
++      codec: codecUsed,
++      playlist: playlistUrl,
++      last_change: new Date().toISOString()
++    })
++  ]);
++}
++
++async function signalStopped(cameraName, reason = 'stopped') {
++  await Promise.all([
++    haFireEvent(`${HA_PREFIX}_stopped`, { camera: cameraName, reason }),
++    haSetState(HA_ENTITY_ID, 'off', {
++      friendly_name: 'Ring Livestream Playing',
++      device_class: 'running',
++      camera: cameraName,
++      reason,
++      last_change: new Date().toISOString()
++    })
++  ]);
++}
++
++// ------- Streaming config -------
++function qualityBaseArgs(q) {
++  switch (q) {
++    case 'low':    return ['-vf','scale=w=854:h=480:force_original_aspect_ratio=decrease','-g','48','-keyint_min','48','-b:a','96k'];
++    case 'medium': return ['-vf','scale=w=1280:h=720:force_original_aspect_ratio=decrease','-g','60','-keyint_min','60','-b:a','128k'];
++    default:       return ['-g','60','-keyint_min','60','-b:a','128k'];
++  }
++}
++function codecCandidates() { return (CODEC_PREF !== 'auto') ? [CODEC_PREF] : ['copy','h264_v4l2m2m','h264']; }
++function codecArgs(codec, q) {
++  switch (codec) {
++    case 'copy':          return ['-c:v','copy','-c:a','aac'];
++    case 'h264_v4l2m2m':  return ['-c:v','h264_v4l2m2m','-b:v', q==='low'?'1200k':q==='medium'?'2500k':'4500k','-c:a','aac'];
++    case 'h264':
++    default:              return ['-c:v','libx264','-preset','veryfast','-b:v', q==='low'?'1200k':q==='medium'?'2500k':'4500k','-c:a','aac'];
++  }
++}
++function hwaccelArgs(hw) { return (hw === 'none') ? [] : ['-hwaccel','auto']; }
++function hlsArgs(target) {
++  return ['-f','hls','-hls_time','2','-hls_list_size','5',
++          '-hls_flags','delete_segments+append_list+program_date_time+independent_segments',
++          '-hls_delete_threshold','10','-master_pl_name','master.m3u8', target];
++}
++
++async function selectCamera(api) {
++  const cams = await api.getCameras();
++  if (!cams.length) throw new Error('No Ring cameras found.');
++  if (!CAMERA_NAME) { log(`[ring] Using first camera: ${cams[0].name}`); return cams[0]; }
++  const c = cams.find(x => (x.name||'').toLowerCase() === CAMERA_NAME.toLowerCase());
++  if (!c) throw new Error(`Camera "${CAMERA_NAME}" not found. Have: ${cams.map(x=>x.name).join(', ')}`);
++  return c;
++}
++
++async function tryStart(camera, codec) {
++  const args = [...hwaccelArgs(HWACCEL_PREF), ...codecArgs(codec, QUALITY), ...qualityBaseArgs(QUALITY), ...hlsArgs(PLAYLIST)];
++  log(`[ring] Starting stream "${camera.name}" codec=${codec} quality=${QUALITY}`);
++  dbg('ffmpeg args:', args.join(' '));
++  const stream = await camera.streamVideo({ output: args });
++  const stop = typeof stream === 'function' ? stream : (stream?.stop ? () => stream.stop() : () => {});
++  return { stop, used: codec };
++}
++
++async function startStreaming(camera) {
++  const order = codecCandidates();
++  for (let i = 0; i < order.length; i++) {
++    try {
++      return await tryStart(camera, order[i]);
++    } catch (e) {
++      console.error(new Date().toISOString(), `[ring] Start failed with codec=${order[i]}:`, e?.message || e);
++      if (i === order.length - 1) throw e;
++      log('[ring] Falling back to next codec…');
++    }
++  }
++  throw new Error('No codec worked');
++}
++
++// ------- main -------
++async function main() {
++  prepareOutDir();
++
++  const api = new RingApi({
++    refreshToken: REFRESH_TOKEN,
++    cameraDingPollingSeconds: 0,
++    logger: DEBUG ? console : undefined
++  });
++
++  if (typeof api.onRefreshTokenUpdated === 'function') {
++    api.onRefreshTokenUpdated(({ newRefreshToken, oldRefreshToken }) => {
++      if (newRefreshToken && newRefreshToken !== oldRefreshToken) {
++        log('[ring] Refresh token rotated (not persisted by this add-on).');
++      }
++    });
++  }
++
++  const cam = await selectCamera(api);
++
++  server.listen(PORT, () => {
++    log(`[http] HLS under /public on port ${PORT}`);
++    log(`[http] Playlist: http://homeassistant.local:${PORT}/public/stream.m3u8`);
++  });
++
++  let stopping = false;
++  process.on('SIGTERM', async () => { stopping = true; server.close(() => log('[http] closed')); await signalStopped(cam.name, 'shutdown'); });
++
++  // Push initial "off" so the entity exists immediately
++  if (HA_ENABLED) await haSetState(HA_ENTITY_ID, 'off', { friendly_name: 'Ring Livestream Playing', device_class: 'running' });
++
++  let backoff = 3000;
++  const MAX_BACKOFF = 30000;
++
++  while (!stopping) {
++    let stopper = null;
++    let usedCodec = 'unknown';
++    try {
++      const started = await startStreaming(cam);
++      stopper = started.stop;
++      usedCodec = started.used;
++      backoff = 3000;
++
++      // Announce playing when playlist begins updating
++      let last = 0;
++      let announced = false;
++      while (!stopping) {
++        await sleep(5000);
++        const st = fs.existsSync(PLAYLIST) ? fs.statSync(PLAYLIST) : null;
++        const mt = st ? st.mtimeMs : 0;
++        if (mt && !last) log('[ring] HLS playlist created.');
++        if (!announced && mt) { announced = true; await signalPlaying(cam.name, usedCodec); }
++        if (last && mt && mt === last) throw new Error('HLS stalled');
++        last = mt;
++      }
++    } catch (e) {
++      console.error(new Date().toISOString(), '[ring] Stream error:', e?.message || e);
++      await signalStopped(cam.name, 'error_or_stall');
++    } finally {
++      try { await Promise.resolve(typeof stopper === 'function' ? stopper() : null); } catch {}
++    }
++
++    if (stopping) break;
++    log(`[ring] Restarting in ${(backoff/1000)|0}s…`);
++    await sleep(backoff);
++    backoff = Math.min(backoff * 2, MAX_BACKOFF);
++  }
++  log('[sys] Exit.');
++}
++
++main().catch(async e => {
++  console.error(new Date().toISOString(), '[fatal]', e?.stack || e);
++  try { await signalStopped(CAMERA_NAME || '(unknown)', 'fatal'); } catch {}
++  process.exit(1);
++});
