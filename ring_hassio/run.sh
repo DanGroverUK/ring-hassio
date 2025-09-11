@@ -6,4 +6,5 @@ export RING_PORT="$(jq --raw-output '.port' $CONFIG_PATH)"
 
 cd /ring-hassio/ring_hassio
 cp public /data/ -r
+chmod 755 /data/public
 node livestream.js
