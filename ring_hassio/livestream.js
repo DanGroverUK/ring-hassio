@@ -123,7 +123,7 @@ function startStream() {
                                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                                 // Write a single string — passing multiple args to res.write treats the second
                                 // arg as an encoding and can cause ERR_UNKNOWN_ENCODING if filename is used.
-                                res.write("file not found: " + filename + "\n");
+                                //res.write("file not found: " + filename + "\n");
                                 res.end();
                             }
                             else {
