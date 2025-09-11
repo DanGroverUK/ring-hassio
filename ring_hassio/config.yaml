@@ -42,4 +42,3 @@ schema:
   ha_integration: bool?
   ha_entity_id: str?
   ha_event_prefix: str?
-image: null
