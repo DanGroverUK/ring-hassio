@@ -8,7 +8,7 @@ RUN apk add --no-cache nodejs npm ffmpeg jq curl bash
 
 WORKDIR /opt/ring
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # App files
 COPY server.js ./
