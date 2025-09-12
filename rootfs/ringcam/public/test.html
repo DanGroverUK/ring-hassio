@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ring Livestream Test</title>
+  <style>
+    body {
+      background: #111;
+      color: #eee;
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    video {
+      width: 80%;
+      max-width: 800px;
+      background: black;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ring Livestream Test</h1>
+  <video id="video" controls autoplay muted></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const video = document.getElementById('video');
+    const streamUrl = 'http://homeassistant.local:8080/public/stream.m3u8'; 
+    // ^ update to your add-on’s accessible URL
+
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        console.log('HLS manifest loaded');
+        video.play();
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari / iOS supports HLS natively
+      video.src = streamUrl;
+      video.addEventListener('loadedmetadata', () => video.play());
+    } else {
+      document.body.innerHTML += '<p>HLS not supported in this browser.</p>';
+    }
+  </script>
+</body>
+</html>
