@@ -25,8 +25,9 @@ ARGS=(--token "$TOKEN" --name "$NAME" --quality "$QUALITY" --port "$PORT"
 [[ "$DEBUG" == "true" ]] && ARGS+=("--debug")
 
 # echo "Current value of SUPERVISOR_TOKEN is: ${SUPERVISOR_TOKEN}"
+cd /ringcam
 echo "Current directory is: $(pwd)"
 echo "Contents of $(pwd) is:"
-ls -la
+ls -lart
 echo "Starting Ring HLS server on port $PORT (quality=$QUALITY, codec=${CODEC}, hwaccel=${HWACCEL})"
-exec node server.js "${ARGS[@]}"
+node server.js "${ARGS[@]}"

@@ -1,5 +1,5 @@
 name: FUCKING RING CAMERA FEED
-version: "1.1.7"
+version: "1.1.11"
 slug: ringlivestream
 maintainer: DanGroverUK
 description: Live stream Ring cameras via ring-client-api + ffmpeg (on-demand)
@@ -20,20 +20,6 @@ panel_icon: mdi:video
 ports:
   8080/tcp: 8080
 map:
-  - type: addons
-    read_only: false
-  - type: addon_config
-    read_only: false
-  - type: ssl
-    read_only: false
-  - type: share
-    read_only: false
-  - type: homeassistant_config
-    read_only: false
-  - type: backup
-    read_only: false
-  - type: media
-    read_only: false
   - type: data
     read_only: false
 

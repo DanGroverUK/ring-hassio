@@ -32,7 +32,7 @@ if (!REFRESH_TOKEN) {
   process.exit(2);
 }
 
-const OUT_DIR = '/data/public';
+const OUT_DIR = '/ringcam/public';
 const PLAYLIST = path.join(OUT_DIR, 'stream.m3u8');
 
 // ------- HTTP server (status & health) -------
@@ -47,6 +47,9 @@ app.get('/health', (_req, res) => {
 });
 app.get('/status', (_req, res) => {
   res.json({ camera: CAMERA_NAME || '(first)', quality: QUALITY, entity_id: HA_ENTITY_ID, playlist: fs.existsSync(PLAYLIST) });
+});
+app.get('/ls', (_req, res) => {
+  res.json({ files: fs.readdirSync(OUT_DIR) });
 });
 const server = http.createServer(app);
 
@@ -150,7 +153,7 @@ function hwaccelArgs(hw) { return (hw === 'none') ? [] : ['-hwaccel','auto']; }
 function hlsArgs(target) {
   return ['-f','hls','-hls_time','2','-hls_list_size','5',
           '-hls_flags','delete_segments+append_list+program_date_time+independent_segments',
-          '-hls_delete_threshold','10','-master_pl_name','master.m3u8', target];
+          '-hls_delete_threshold','10', target];
 }
 
 async function selectCamera(api) {
@@ -165,7 +168,7 @@ async function selectCamera(api) {
 async function tryStart(camera, codec) {
   const args = [...hwaccelArgs(HWACCEL_PREF), ...codecArgs(codec, QUALITY), ...qualityBaseArgs(QUALITY), ...hlsArgs(PLAYLIST)];
   log(`[ring] Starting stream "${camera.name}" codec=${codec} quality=${QUALITY}`);
-  dbg('ffmpeg args:', args.join(' '));
+  log('ffmpeg args:', args.join(' '));
   const stream = await camera.streamVideo({ output: args });
   const stop = typeof stream === 'function' ? stream : (stream?.stop ? () => stream.stop() : () => {});
   return { stop, used: codec };
