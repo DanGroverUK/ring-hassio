@@ -10,9 +10,9 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "minimist": "^1.2.8",
-    "ring-client-api": "^13.3.0"
+    "cors": "^2",
+    "express": "^4",
+    "minimist": "^1",
+    "ring-client-api": "^14"
   }
 }
