@@ -192,7 +192,8 @@ async function main() {
   const api = new RingApi({
     refreshToken: REFRESH_TOKEN,
     cameraDingPollingSeconds: 0,
-    logger: DEBUG ? console : undefined
+    logger: DEBUG ? console : undefined,
+    ffmpegPath: "ffmpeg"
   });
 
   if (typeof api.onRefreshTokenUpdated === 'function') {
