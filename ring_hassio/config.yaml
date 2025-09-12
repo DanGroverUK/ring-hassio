@@ -11,6 +11,8 @@ url: https://github.com/DanGroverUK/ring-hassio
 boot: manual
 init: false
 ingress: false
+homeassistant_api: true
+hassio_api: true
 panel_icon: mdi:video
 ports:
   8080/tcp: 8080
