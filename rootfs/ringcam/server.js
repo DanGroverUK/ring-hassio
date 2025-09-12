@@ -35,6 +35,21 @@ if (!REFRESH_TOKEN) {
 const OUT_DIR = '/ringcam/public';
 const PLAYLIST = path.join(OUT_DIR, 'stream.m3u8');
 
+// Generate a test video using ffmpeg if it doesn't exist
+const TEST_VIDEO = path.join(OUT_DIR, 'test.mp4');
+if (!fs.existsSync(TEST_VIDEO)) {
+  const { spawnSync } = await import('node:child_process');
+  prepareOutDir();
+  const ffmpegArgs = ['-f', 'lavfi', '-i', 'smptebars', '-t', '30', TEST_VIDEO];
+  console.info('[ffmpeg] Generating test video:', ffmpegArgs.join(' '));
+  const result = spawnSync('ffmpeg', ffmpegArgs, { stdio: 'inherit' });
+  console.info('[ffmpeg] Test video result str? ', result.stdout);
+  if (result.error) {
+    console.error('[ffmpeg] Failed to generate test video:', result.error);
+  }
+
+}
+
 // ------- HTTP server (status & health) -------
 const app = express();
 app.use('/public', express.static(OUT_DIR, { fallthrough: false }));
@@ -49,7 +64,7 @@ app.get('/status', (_req, res) => {
   res.json({ camera: CAMERA_NAME || '(first)', quality: QUALITY, entity_id: HA_ENTITY_ID, playlist: fs.existsSync(PLAYLIST) });
 });
 app.get('/ls', (_req, res) => {
-  res.json({ files: fs.readdirSync(OUT_DIR) });
+  res.json({ files: fs.readdirSync(OUT_DIR), realpath: fs.realpathSync(OUT_DIR) });
 });
 const server = http.createServer(app);
 
@@ -153,7 +168,7 @@ function hwaccelArgs(hw) { return (hw === 'none') ? [] : ['-hwaccel','auto']; }
 function hlsArgs(target) {
   return ['-f','hls','-hls_time','2','-hls_list_size','5',
           '-hls_flags','delete_segments+append_list+program_date_time+independent_segments',
-          '-hls_delete_threshold','10', target];
+          '-hls_delete_threshold','10', target, "-loglevel", "debug"];
 }
 
 async function selectCamera(api) {
