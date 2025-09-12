@@ -18,10 +18,15 @@ HA_PREFIX=$(jq -r '.ha_event_prefix // "ring_livestream"' "$OPTIONS")
 
 export NODE_ENV=production
 
+
 ARGS=(--token "$TOKEN" --name "$NAME" --quality "$QUALITY" --port "$PORT"
       --codec "$CODEC" --hwaccel "$HWACCEL"
       --ha-integration "$HA_INT" --ha-entity "$HA_ENTITY" --ha-prefix "$HA_PREFIX")
 [[ "$DEBUG" == "true" ]] && ARGS+=("--debug")
 
+# echo "Current value of SUPERVISOR_TOKEN is: ${SUPERVISOR_TOKEN}"
+echo "Current directory is: $(pwd)"
+echo "Contents of $(pwd) is:"
+ls -la
 echo "Starting Ring HLS server on port $PORT (quality=$QUALITY, codec=${CODEC}, hwaccel=${HWACCEL})"
-exec node /opt/ring/server.js "${ARGS[@]}"
+exec node server.js "${ARGS[@]}"

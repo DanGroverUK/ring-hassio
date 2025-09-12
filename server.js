@@ -32,7 +32,7 @@ if (!REFRESH_TOKEN) {
   process.exit(2);
 }
 
-const OUT_DIR = '/opt/ring/public';
+const OUT_DIR = '/data/public';
 const PLAYLIST = path.join(OUT_DIR, 'stream.m3u8');
 
 // ------- HTTP server (status & health) -------
