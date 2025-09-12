@@ -1,8 +1,11 @@
+
+
 // server.js - Ring → ffmpeg → HLS + Home Assistant events/state
+import express from "express";
+import cors from "cors";
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
-import express from 'express';
 import minimist from 'minimist';
 import { RingApi } from 'ring-client-api';
 
@@ -35,23 +38,30 @@ if (!REFRESH_TOKEN) {
 const OUT_DIR = '/ringcam/public';
 const PLAYLIST = path.join(OUT_DIR, 'stream.m3u8');
 
-// Generate a test video using ffmpeg if it doesn't exist
-const TEST_VIDEO = path.join(OUT_DIR, 'test.mp4');
-if (!fs.existsSync(TEST_VIDEO)) {
-  const { spawnSync } = await import('node:child_process');
-  prepareOutDir();
-  const ffmpegArgs = ['-f', 'lavfi', '-i', 'smptebars', '-t', '30', TEST_VIDEO];
-  console.info('[ffmpeg] Generating test video:', ffmpegArgs.join(' '));
-  const result = spawnSync('ffmpeg', ffmpegArgs, { stdio: 'inherit' });
-  console.info('[ffmpeg] Test video result str? ', result.stdout);
-  if (result.error) {
-    console.error('[ffmpeg] Failed to generate test video:', result.error);
-  }
-
-}
 
 // ------- HTTP server (status & health) -------
 const app = express();
+
+app.use(cors({ origin: "*", methods: ["GET", "HEAD"] }));
+
+function noCache(res) {
+  res.set("Cache-Control", "no-store, must-revalidate");
+}
+
+// Serve HLS playlists with proper MIME type
+app.get(/\.m3u8$/, (req, res, next) => {
+  res.type("application/vnd.apple.mpegurl");
+  noCache(res);
+  next();
+});
+
+// Serve MPEG-TS segments with proper MIME type
+app.get(/\.ts$/, (req, res, next) => {
+  res.type("video/mp2t");
+  noCache(res);
+  next();
+});
+
 app.use('/public', express.static(OUT_DIR, { fallthrough: false }));
 app.get('/health', (_req, res) => {
   fs.stat(PLAYLIST, (err, st) => {
