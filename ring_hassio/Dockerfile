@@ -15,7 +15,7 @@ COPY run.sh /run.sh
 RUN chmod +x /run.sh
 
 # HLS output location
-RUN mkdir -p /opt/ring/public && chmod 755 /opt/ring/public
+RUN mkdir -p /opt/ring/public && chmod 755 /opt/ring/public && echo "fuck" > /opt/ring/public/fuck.html
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS http://localhost:8080/health || exit 1
