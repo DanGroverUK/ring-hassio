@@ -109,6 +109,10 @@ function prepareOutDir() {
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || '';
 const HA_BASE = 'http://supervisor/core/api';
 
+// CLI fallbacks (from run.sh / options)
+const HA_BASE_OVERRIDE = argv['ha-base'] || '';  // e.g., http://homeassistant.local:8123/api
+const HA_USER_TOKEN     = argv['ha-token'] || '';
+
 function resolveHaAuth() {
   if (SUPERVISOR_TOKEN) {
     return { base: HA_BASE, token: SUPERVISOR_TOKEN, mode: 'supervisor' };
