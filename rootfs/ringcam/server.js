@@ -35,7 +35,28 @@ if (!REFRESH_TOKEN) {
   process.exit(2);
 }
 
-console.log('[ha] SUPERVISOR_TOKEN present:', Boolean(process.env.SUPERVISOR_TOKEN));
+import fs from "node:fs";
+
+function readIfExists(p) {
+  try {
+    return fs.readFileSync(p, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+// Try standard env, then s6’s env dir, then the supervisor token file in /data
+function getSupervisorToken() {
+  return (
+    process.env.SUPERVISOR_TOKEN ||
+    readIfExists("/run/s6/container_environment/SUPERVISOR_TOKEN") ||
+    readIfExists("/data/supervisor_token") ||
+    ""
+  );
+}
+
+
+//console.log('[ha] SUPERVISOR_TOKEN present:', Boolean(process.env.SUPERVISOR_TOKEN));
 
 
 const OUT_DIR = '/ringcam/public';
@@ -91,6 +112,19 @@ app.get('/ha-me', async (_req, res) => {
   if (!r) return res.status(500).json({ ok:false, reason:'no_auth' });
   res.json(await r.json());
 });
+
+app.get("/ha-diag", (_req, res) => {
+  const envVar = Boolean(process.env.SUPERVISOR_TOKEN);
+  const s6File = fs.existsSync("/run/s6/container_environment/SUPERVISOR_TOKEN");
+  const dataFile = fs.existsSync("/data/supervisor_token");
+  res.json({
+    has_env_SUPERVISOR_TOKEN: envVar,
+    has_s6_file: s6File,
+    has_data_token_file: dataFile,
+    token_length: getSupervisorToken().length,
+  });
+});
+
 const server = http.createServer(app);
 
 // ------- utils -------
@@ -106,38 +140,36 @@ function prepareOutDir() {
 }
 
 // ------- HA integration helpers (Supervisor Core API proxy) -------
-const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || '';
+// const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || '';
 const HA_BASE = 'http://supervisor/core/api';
+const SUP_TOKEN = getSupervisorToken();
 
 // CLI fallbacks (from run.sh / options)
 const HA_BASE_OVERRIDE = argv['ha-base'] || '';  // e.g., http://homeassistant.local:8123/api
 const HA_USER_TOKEN     = argv['ha-token'] || '';
 
 function resolveHaAuth() {
-  if (SUPERVISOR_TOKEN) {
-    return { base: HA_BASE, token: SUPERVISOR_TOKEN, mode: 'supervisor' };
+  if (SUP_TOKEN) {
+    return { base: HA_BASE, token: SUP_TOKEN, mode: 'supervisor' };
   }
   if (HA_BASE_OVERRIDE && HA_USER_TOKEN) {
-    return { base: HA_BASE.replace(/\/+$/,'') , token: HA_USER_TOKEN, mode: 'user' };
+    return { base: HA_BASE_OVERRIDE.replace(/\/+$/,'') , token: HA_USER_TOKEN, mode: 'user' };
   }
   return null;
 }
+
 
 async function haFetch(path, init = {}) {
   if (!HA_ENABLED) return null;
   const auth = resolveHaAuth();
   if (!auth) {
-    console.error('[ha] No auth available: SUPERVISOR_TOKEN not set and no fallback token/base provided.');
+    console.error("[ha] No auth available: missing Supervisor token and no fallback provided.");
     return null;
   }
   const headers = init.headers ? new Headers(init.headers) : new Headers();
-  headers.set('Authorization', `Bearer ${auth.token}`);
-  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const url = `${auth.base}${path}`;
-  const res = await fetch(url, { ...init, headers });
-  if (!res.ok) {
-    console.error('[ha] request failed', res.status, res.statusText, 'mode=', auth.mode, 'url=', path);
-  }
+  headers.set("Authorization", `Bearer ${auth.token}`);
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const res = await fetch(`${auth.base}${path}`, { ...init, headers });
   return res;
 }
 
