@@ -36,6 +36,8 @@ options:
   ha_integration: true # enable/disable HA API calls
   ha_entity_id: "binary_sensor.ring_livestream_playing"
   ha_event_prefix: "ring_livestream" # -> ring_livestream_started / ring_livestream_stopped
+  ha_base_url: ""            # optional fallback, e.g. http://homeassistant.local:8123/api
+  ha_long_lived_token: ""    # optional fallback token
 
 schema:
   ring_refresh_token: str
@@ -48,3 +50,5 @@ schema:
   ha_integration: bool?
   ha_entity_id: str?
   ha_event_prefix: str?
+  ha_base_url: str?
+  ha_long_lived_token: str?
