@@ -35,7 +35,6 @@ if (!REFRESH_TOKEN) {
   process.exit(2);
 }
 
-import fs from "node:fs";
 
 function readIfExists(p) {
   try {
