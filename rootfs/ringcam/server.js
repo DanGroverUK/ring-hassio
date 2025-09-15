@@ -35,6 +35,9 @@ if (!REFRESH_TOKEN) {
   process.exit(2);
 }
 
+console.log('[ha] SUPERVISOR_TOKEN present:', Boolean(process.env.SUPERVISOR_TOKEN));
+
+
 const OUT_DIR = '/ringcam/public';
 const PLAYLIST = path.join(OUT_DIR, 'stream.m3u8');
 
@@ -76,6 +79,18 @@ app.get('/status', (_req, res) => {
 app.get('/ls', (_req, res) => {
   res.json({ files: fs.readdirSync(OUT_DIR), realpath: fs.realpathSync(OUT_DIR) });
 });
+app.get('/ha-ping', async (_req, res) => {
+  const r = await haFetch('/');
+  if (!r) return res.status(500).json({ ok:false, reason:'no_auth' });
+  const j = await r.json();
+  res.json({ ok:true, mode: (resolveHaAuth()||{}).mode, keys: Object.keys(j).slice(0,5) });
+});
+
+app.get('/ha-me', async (_req, res) => {
+  const r = await haFetch('/config');
+  if (!r) return res.status(500).json({ ok:false, reason:'no_auth' });
+  res.json(await r.json());
+});
 const server = http.createServer(app);
 
 // ------- utils -------
@@ -94,15 +109,43 @@ function prepareOutDir() {
 const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || '';
 const HA_BASE = 'http://supervisor/core/api';
 
+function resolveHaAuth() {
+  if (SUPERVISOR_TOKEN) {
+    return { base: HA_BASE, token: SUPERVISOR_TOKEN, mode: 'supervisor' };
+  }
+  if (HA_BASE_OVERRIDE && HA_USER_TOKEN) {
+    return { base: HA_BASE.replace(/\/+$/,'') , token: HA_USER_TOKEN, mode: 'user' };
+  }
+  return null;
+}
+
 async function haFetch(path, init = {}) {
   if (!HA_ENABLED) return null;
-  if (!SUPERVISOR_TOKEN) { console.error('[ha] SUPERVISOR_TOKEN not present; disable ha_integration or run as HA add-on.'); return null; }
+  const auth = resolveHaAuth();
+  if (!auth) {
+    console.error('[ha] No auth available: SUPERVISOR_TOKEN not set and no fallback token/base provided.');
+    return null;
+  }
   const headers = init.headers ? new Headers(init.headers) : new Headers();
-  headers.set('Authorization', `Bearer ${SUPERVISOR_TOKEN}`);
-  headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${HA_BASE}${path}`, { ...init, headers });
+  headers.set('Authorization', `Bearer ${auth.token}`);
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  const url = `${auth.base}${path}`;
+  const res = await fetch(url, { ...init, headers });
+  if (!res.ok) {
+    console.error('[ha] request failed', res.status, res.statusText, 'mode=', auth.mode, 'url=', path);
+  }
   return res;
 }
+
+// async function haFetch(path, init = {}) {
+//   if (!HA_ENABLED) return null;
+//   if (!SUPERVISOR_TOKEN) { console.error('[ha] SUPERVISOR_TOKEN not present; disable ha_integration or run as HA add-on.'); return null; }
+//   const headers = init.headers ? new Headers(init.headers) : new Headers();
+//   headers.set('Authorization', `Bearer ${SUPERVISOR_TOKEN}`);
+//   headers.set('Content-Type', 'application/json');
+//   const res = await fetch(`${HA_BASE}${path}`, { ...init, headers });
+//   return res;
+// }
 
 async function haFireEvent(type, data) {
   if (!HA_ENABLED) return;

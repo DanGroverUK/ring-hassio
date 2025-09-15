@@ -1,5 +1,5 @@
 name: FUCKING RING CAMERA FEED
-version: "1.1.13"
+version: "1.1.14"
 slug: ringlivestream
 maintainer: DanGroverUK
 description: Live stream Ring cameras via ring-client-api + ffmpeg (on-demand)
@@ -14,8 +14,8 @@ init: false
 ingress: false
 homeassistant_api: true
 hassio_api: true
-auth_api: true
-hassio_role: manager
+# auth_api: true
+# hassio_role: manager
 panel_icon: mdi:video
 ports:
   8080/tcp: 8080
@@ -36,6 +36,7 @@ options:
   ha_integration: true # enable/disable HA API calls
   ha_entity_id: "binary_sensor.ring_livestream_playing"
   ha_event_prefix: "ring_livestream" # -> ring_livestream_started / ring_livestream_stopped
+
 schema:
   ring_refresh_token: str
   camera_name: str
